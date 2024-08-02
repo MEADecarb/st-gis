@@ -6,6 +6,7 @@ import folium
 from streamlit_folium import folium_static
 from folium.plugins import MarkerCluster
 import requests
+import tempfile
 
 class GeoDataManipulator:
     def __init__(self):
@@ -13,10 +14,11 @@ class GeoDataManipulator:
         self.marker_cluster = MarkerCluster().add_to(self.map)
         self.uploaded_files = None
         self.selected_files = None
-        self.data_frame = None
+        self.data_frames = []
         self.latitude_column = None
         self.longitude_column = None
         self.github_files = {}
+        self.temp_dir = tempfile.TemporaryDirectory()
         self._setup_page()
 
     def _setup_page(self):
@@ -89,81 +91,84 @@ class GeoDataManipulator:
 
     def _load_tabular_data(self, file, extension):
         if extension == "csv":
-            self.data_frame = pd.read_csv(file)
+            df = pd.read_csv(file)
         else:
-            self.data_frame = pd.read_excel(file, engine="openpyxl")
+            df = pd.read_excel(file, engine="openpyxl")
 
-        self.latitude_column, self.longitude_column = self._select_lat_long_columns()
-        self.data_frame = gpd.GeoDataFrame(
-            self.data_frame,
+        self.latitude_column, self.longitude_column = self._select_lat_long_columns(df)
+        gdf = gpd.GeoDataFrame(
+            df,
             geometry=gpd.points_from_xy(
-                self.data_frame[self.longitude_column],
-                self.data_frame[self.latitude_column],
+                df[self.longitude_column],
+                df[self.latitude_column],
             ),
             crs="wgs84",
         ).dropna(subset=[self.longitude_column, self.latitude_column])
 
-        self._apply_filters()
-        self._fit_map_to_bounds(self.data_frame.total_bounds)
-        self._add_markers()
+        self.data_frames.append(gdf)
+        self._apply_filters(gdf)
+        self._fit_map_to_bounds(gdf.total_bounds)
+        self._add_markers(gdf)
         folium.LayerControl().add_to(self.map)
 
     def _load_tabular_data_from_url(self, url, extension):
         if extension == "csv":
-            self.data_frame = pd.read_csv(url)
+            df = pd.read_csv(url)
         else:
-            self.data_frame = pd.read_excel(url, engine="openpyxl")
+            df = pd.read_excel(url, engine="openpyxl")
 
-        self.latitude_column, self.longitude_column = self._select_lat_long_columns()
-        self.data_frame = gpd.GeoDataFrame(
-            self.data_frame,
+        self.latitude_column, self.longitude_column = self._select_lat_long_columns(df)
+        gdf = gpd.GeoDataFrame(
+            df,
             geometry=gpd.points_from_xy(
-                self.data_frame[self.longitude_column],
-                self.data_frame[self.latitude_column],
+                df[self.longitude_column],
+                df[self.latitude_column],
             ),
             crs="wgs84",
         ).dropna(subset=[self.longitude_column, self.latitude_column])
 
-        self._apply_filters()
-        self._fit_map_to_bounds(self.data_frame.total_bounds)
-        self._add_markers()
+        self.data_frames.append(gdf)
+        self._apply_filters(gdf)
+        self._fit_map_to_bounds(gdf.total_bounds)
+        self._add_markers(gdf)
         folium.LayerControl().add_to(self.map)
 
-    def _select_lat_long_columns(self):
+    def _select_lat_long_columns(self, df):
         col1, col2 = st.columns(2)
 
         with col1:
-            lat_index = self._get_column_index("lat|latitude")
+            lat_index = self._get_column_index(df, "lat|latitude")
             latitude_column = st.selectbox(
-                "Choose latitude column:", self.data_frame.columns, index=lat_index
+                "Choose latitude column:", df.columns, index=lat_index
             )
         with col2:
-            lng_index = self._get_column_index("lng|long|longitude")
+            lng_index = self._get_column_index(df, "lng|long|longitude")
             longitude_column = st.selectbox(
-                "Choose longitude column:", self.data_frame.columns, index=lng_index
+                "Choose longitude column:", df.columns, index=lng_index
             )
 
         return latitude_column, longitude_column
 
-    def _get_column_index(self, pattern):
-        column_guess = self.data_frame.columns.str.contains(pattern, case=False)
+    def _get_column_index(self, df, pattern):
+        column_guess = df.columns.str.contains(pattern, case=False)
         if column_guess.any():
-            return self.data_frame.columns.get_loc(self.data_frame.columns[column_guess][0])
+            return df.columns.get_loc(df.columns[column_guess][0])
         return 0
 
     def _load_geospatial_data(self, file):
-        self.data_frame = gpd.read_file(file)
+        gdf = gpd.read_file(file)
+        self.data_frames.append(gdf)
         layer_name = file.name.split(".")[0]
-        json_data_frame = json.loads(self.data_frame.to_json())
-        self._apply_filters()
-        self._fit_map_to_bounds(self.data_frame.total_bounds)
+        json_data_frame = json.loads(gdf.to_json())
+        self._apply_filters(gdf)
+        self._fit_map_to_bounds(gdf.total_bounds)
         self._add_geojson_layer(json_data_frame, layer_name)
 
     def _fit_map_to_bounds(self, bounds):
         self.map.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
 
-    def _add_markers(self):
-        for _, row in self.data_frame.iterrows():
+    def _add_markers(self, gdf):
+        for _, row in gdf.iterrows():
             popup_html = self.create_popup_html(row[:-1])
             folium.Marker(
                 location=[row[self.latitude_column], row[self.longitude_column]],
@@ -215,8 +220,8 @@ class GeoDataManipulator:
                 df = df[(df[input_column] >= uvalue[0]) & (df[input_column] <= uvalue[1])]
         return df
 
-    def _apply_filters(self):
-        self.data_frame = self.filter_dataframe(self.data_frame)
+    def _apply_filters(self, gdf):
+        self.data_frame = self.filter_dataframe(gdf)
 
     def create_popup_html(self, properties):
         html = "<div style='max-height: 200px; overflow-y: auto;'>"
@@ -224,6 +229,18 @@ class GeoDataManipulator:
             html += f"<b>{key}</b>: {value}<br>"
         html += "</div>"
         return html
+
+    def _save_data(self):
+        if self.data_frames:
+            combined_data = pd.concat(self.data_frames, ignore_index=True)
+            save_path = f"{self.temp_dir.name}/combined_data.csv"
+            combined_data.to_csv(save_path, index=False)
+            st.sidebar.download_button(
+                label="Download combined data as CSV",
+                data=open(save_path, 'rb'),
+                file_name="combined_data.csv",
+                mime="text/csv"
+            )
 
     def _display_layout(self):
         col1, col2 = st.columns([1, 1])
@@ -234,13 +251,16 @@ class GeoDataManipulator:
 
         with col2:
             st.markdown("## DataFrame")
-            st.dataframe(self.data_frame.drop(columns="geometry"))
-            st.download_button(
-                label="Download data as CSV",
-                data=self.data_frame.to_csv().encode("utf-8"),
-                file_name="Streamlit_df.csv",
-                mime="text/csv",
-            )
+            if not self.data_frames:
+                st.write("No data available")
+            else:
+                st.dataframe(self.data_frame.drop(columns="geometry"))
+                st.download_button(
+                    label="Download data as CSV",
+                    data=self.data_frame.to_csv().encode("utf-8"),
+                    file_name="Streamlit_df.csv",
+                    mime="text/csv",
+                )
 
 if __name__ == "__main__":
     app = GeoDataManipulator()
