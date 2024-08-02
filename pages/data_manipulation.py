@@ -81,7 +81,7 @@ class GeoDataManipulator:
         if extension == "geojson":
             self.data_frame = gpd.read_file(url)
             json_data_frame = json.loads(self.data_frame.to_json())
-            self._apply_filters()
+            self._apply_filters(self.data_frame)
             self._fit_map_to_bounds(self.data_frame.total_bounds)
             self._add_geojson_layer(json_data_frame, layer_name)
         elif extension in {"csv", "xlsx"}:
