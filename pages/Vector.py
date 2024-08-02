@@ -175,7 +175,10 @@ class GeoDataVisualizer:
 
         for i, url in enumerate(wfs_urls[:5]):
             try:
-                wfs_gdf = gpd.read_file(url)
+                if "arcgis/rest/services" in url:
+                    wfs_gdf = self._fetch_arcgis_data(url)
+                else:
+                    wfs_gdf = gpd.read_file(url)
                 layer_name = f"WFS Layer {i + 1}"
                 json_data_frame = json.loads(wfs_gdf.to_json())
                 self._fit_map_to_bounds(wfs_gdf.total_bounds)
@@ -183,6 +186,13 @@ class GeoDataVisualizer:
             except Exception as e:
                 st.sidebar.error(f"Failed to load WFS URL {i + 1}: {e}")
 
+    def _fetch_arcgis_data(self, url):
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            return gpd.GeoDataFrame.from_features(data["features"])
+        else:
+            raise Exception("Failed to fetch data from ArcGIS Feature Server")
 
 if __name__ == "__main__":
     GeoDataVisualizer()
