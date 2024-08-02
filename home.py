@@ -22,16 +22,6 @@ st.sidebar.info(
 )
 
 
-st.write(
-    """
-    ### 💻 Used Technology:
-    - Streamlit
-    - Pandas
-    - Geopandas
-    - Folium
-    """
-)
-
 # About section
 st.markdown("## About")
 
@@ -83,5 +73,14 @@ st.write(
     6. **Exploring the Data Table**: Scroll down to view the data table associated with the map. This table provides a detailed view of your data and can be used for further analysis.
     
     This application is built to be user-friendly and versatile, catering to both novice and advanced users who need to work with geospatial and tabular data. We hope you find it useful for your data exploration and analysis needs!
+    """
+)
+st.write(
+    """
+    ### 💻 Used Technology:
+    - Streamlit
+    - Pandas
+    - Geopandas
+    - Folium
     """
 )
