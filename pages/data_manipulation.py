@@ -179,7 +179,7 @@ class GeoDataManipulator:
         if "features" in json_data_frame and json_data_frame["features"]:
             property_keys = list(json_data_frame["features"][0]["properties"].keys())
             folium.GeoJson(
-                self.data_frame,
+                json_data_frame,
                 name=layer_name,
                 zoom_on_click=True,
                 highlight_function=lambda feature: {"fillColor": "dark gray"},
@@ -191,7 +191,7 @@ class GeoDataManipulator:
                 ),
             ).add_to(self.map)
         else:
-            folium.GeoJson(self.data_frame, name=layer_name, zoom_on_click=True).add_to(self.map)
+            folium.GeoJson(json_data_frame, name=layer_name, zoom_on_click=True).add_to(self.map)
         folium.LayerControl().add_to(self.map)
 
     def filter_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -237,7 +237,7 @@ class GeoDataManipulator:
             combined_data.to_csv(save_path, index=False)
             st.sidebar.download_button(
                 label="Download combined data as CSV",
-                data=open(save_path, 'rb'),
+                data=open(save_path, 'rb').read(),
                 file_name="combined_data.csv",
                 mime="text/csv"
             )
