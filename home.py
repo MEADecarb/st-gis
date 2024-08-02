@@ -31,7 +31,7 @@ st.write(
     """
 )
 
-st.markdown("### Vector Data Visualization 📊")
+st.markdown("### Vector Data Visualization 🌍")
 
 st.write(
     """
