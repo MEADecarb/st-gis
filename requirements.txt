@@ -1,5 +1,6 @@
 # Essential packages for Streamlit
 streamlit==1.24.0
+streamlit-folium==0.4.0
 
 # Visualization and plotting
 altair==4.0.0
