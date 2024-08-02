@@ -12,7 +12,8 @@ class GeoDataVisualizer:
     def __init__(self):
         self.map = folium.Map([0, 0], zoom_start=2)
         self.marker_cluster = MarkerCluster().add_to(self.map)
-        self.uploaded_files = None
+        self.uploaded_files = []
+        self.selected_files = []
         self.data_frames = []
         self.latitude_column = None
         self.longitude_column = None
@@ -22,18 +23,18 @@ class GeoDataVisualizer:
     def _setup_page(self):
         st.set_page_config(page_title="Data Visualization", layout="wide", page_icon="🗺️")
         st.sidebar.markdown("# Vector Data Visualization 🗺️")
-        self.uploaded_files = self._get_uploaded_files()
+        self._get_files()
         self._add_basemaps()
         self._load_data()
 
-    def _get_uploaded_files(self):
-        file = st.file_uploader("Upload a file", type=["csv", "xlsx", "zip", "geojson"], accept_multiple_files=True)
-        if file:
-            return file
+    def _get_files(self):
+        uploaded_files = st.file_uploader("Upload one or more files", type=["csv", "xlsx", "zip", "geojson"], accept_multiple_files=True)
+        if uploaded_files:
+            self.uploaded_files = uploaded_files
         st.write("Or")
         file_options = self._fetch_github_files()
         selected_files = st.multiselect("Choose one or more options", list(file_options.keys()))
-        return [file_options[file_name] for file_name in selected_files]
+        self.selected_files = [file_options[file_name] for file_name in selected_files]
 
     def _fetch_github_files(self):
         url = "https://api.github.com/repos/MEADecarb/st-gis/contents/data"
@@ -54,12 +55,13 @@ class GeoDataVisualizer:
         folium.TileLayer("CartoDB dark_matter", name="CartoDB Dark").add_to(self.map)
 
     def _load_data(self):
-        if self.uploaded_files:
-            for uploaded_file in self.uploaded_files:
-                if isinstance(uploaded_file, str):
-                    self._load_data_from_url(uploaded_file)
+        all_files = self.uploaded_files + self.selected_files
+        if all_files:
+            for file in all_files:
+                if isinstance(file, str):
+                    self._load_data_from_url(file)
                 else:
-                    self._load_data_from_file(uploaded_file)
+                    self._load_data_from_file(file)
             self._fit_map_to_all_bounds()
             folium.LayerControl().add_to(self.map)
             folium_static(self.map, width=1000)
