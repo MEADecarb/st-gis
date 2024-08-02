@@ -22,8 +22,8 @@ class GeoDataVisualizer:
         self._setup_page()
 
     def _setup_page(self):
-        st.set_page_config(page_title="Data Visualization", layout="wide", page_icon="🗺️")
-        st.sidebar.markdown("# Vector Data Visualization 🗺️")
+        st.set_page_config(page_title="Data Visualization", layout="wide", page_icon="🛰️")
+        st.sidebar.markdown("# Vector Data Visualization 🛰️")
         with st.sidebar.expander("User Instructions"):
             st.markdown("""
             ### Instructions:
@@ -33,8 +33,10 @@ class GeoDataVisualizer:
             4. **Data Table**: The data associated with the map will be displayed below the map.
             """)
         self._get_files()
-        self._load_data()
-        self._save_data()
+        if self.uploaded_files or self.selected_files:
+            self._load_data()
+            self._save_data()
+            self._display_layout()
 
     def _get_files(self):
         uploaded_files = st.file_uploader("Upload one or more files", type=["csv", "xlsx", "zip", "geojson"], accept_multiple_files=True)
@@ -197,6 +199,26 @@ class GeoDataVisualizer:
         combined_data = pd.concat(self.data_frames, ignore_index=True)
         save_path = f"{self.temp_dir.name}/combined_data.csv"
         combined_data.to_csv(save_path, index=False)
+
+    def _display_layout(self):
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            st.markdown("## Map")
+            folium_static(self.map, width=1000)
+
+        with col2:
+            st.markdown("## Data Table")
+            if not self.data_frames:
+                st.write("No data available")
+            else:
+                st.dataframe(self.data_frame.drop(columns="geometry"))
+                st.download_button(
+                    label="Download data as CSV",
+                    data=self.data_frame.to_csv().encode("utf-8"),
+                    file_name="Streamlit_df.csv",
+                    mime="text/csv",
+                )
 
 if __name__ == "__main__":
     GeoDataVisualizer()
