@@ -195,7 +195,6 @@ class GeoDataVisualizer:
         combined_data = pd.concat(self.data_frames, ignore_index=True)
         save_path = f"{self.temp_dir.name}/combined_data.csv"
         combined_data.to_csv(save_path, index=False)
-        st.success("Data saved successfully!")
 
 if __name__ == "__main__":
     GeoDataVisualizer()
