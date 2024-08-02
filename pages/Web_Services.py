@@ -36,7 +36,6 @@ class GeoDataVisualizer:
         self._get_files()
         if self.uploaded_files or self.selected_files:
             self._load_data()
-            self._save_data()
             self._display_layout()
 
     def _get_files(self):
@@ -229,11 +228,6 @@ class GeoDataVisualizer:
             html += f"<b>{key}</b>: {value}<br>"
         html += "</div>"
         return html
-
-    def _save_data(self):
-        combined_data = pd.concat(self.data_frames, ignore_index=True)
-        save_path = f"{self.temp_dir.name}/combined_data.csv"
-        combined_data.to_csv(save_path, index=False)
 
     def _display_layout(self):
         col1, col2 = st.columns([1, 1])
