@@ -217,4 +217,43 @@ class GeoDataVisualizer:
             ).add_to(self.marker_cluster)
 
     def _display_data(self, data_frame):
-        st
+        st.dataframe(data_frame.drop(columns="geometry"))
+
+    def _display_all_data(self):
+        for data_frame in self.data_frames:
+            self._display_data(data_frame)
+
+    def create_popup_html(self, properties):
+        html = "<div style='max-height: 200px; overflow-y: auto;'>"
+        for key, value in properties.items():
+            html += f"<b>{key}</b>: {value}<br>"
+        html += "</div>"
+        return html
+
+    def _save_data(self):
+        combined_data = pd.concat(self.data_frames, ignore_index=True)
+        save_path = f"{self.temp_dir.name}/combined_data.csv"
+        combined_data.to_csv(save_path, index=False)
+
+    def _display_layout(self):
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            st.markdown("## Map")
+            folium_static(self.map, width=1000)
+
+        with col2:
+            st.markdown("## Data Table")
+            if not self.data_frames:
+                st.write("No data available")
+            else:
+                st.dataframe(self.data_frame.drop(columns="geometry"))
+                st.download_button(
+                    label="Download data as CSV",
+                    data=self.data_frame.to_csv().encode("utf-8"),
+                    file_name="Streamlit_df.csv",
+                    mime="text/csv",
+                )
+
+if __name__ == "__main__":
+    GeoDataVisualizer()
