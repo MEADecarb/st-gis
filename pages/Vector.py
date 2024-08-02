@@ -6,6 +6,7 @@ import geopandas as gpd
 import folium
 from streamlit_folium import folium_static
 from folium.plugins import MarkerCluster
+import tempfile
 
 class GeoDataVisualizer:
     def __init__(self):
@@ -17,6 +18,7 @@ class GeoDataVisualizer:
         self.latitude_column = None
         self.longitude_column = None
         self.github_files = {}
+        self.temp_dir = tempfile.TemporaryDirectory()
         self._setup_page()
 
     def _setup_page(self):
@@ -194,8 +196,18 @@ class GeoDataVisualizer:
 
     def _save_data(self):
         combined_data = pd.concat(self.data_frames, ignore_index=True)
-        combined_data.to_csv("/tmp/combined_data.csv", index=False)
+        save_path = f"{self.temp_dir.name}/combined_data.csv"
+        combined_data.to_csv(save_path, index=False)
+        
         st.success("Data saved successfully!")
+        st.markdown(f"Download the combined data file: [combined_data.csv]({save_path})")
+        with open(save_path, "rb") as file:
+            st.download_button(
+                label="Download combined data as CSV",
+                data=file,
+                file_name="combined_data.csv",
+                mime="text/csv"
+            )
 
 if __name__ == "__main__":
     GeoDataVisualizer()
