@@ -74,7 +74,7 @@ class GeoDataVisualizer:
                 if isinstance(file, str):
                     if "wfs" in file.lower():
                         self._load_wfs_data(file)
-                    elif "arcgis" in file.lower():
+                    elif "arcgis" in file.lower() or "featureserver" in file.lower():
                         self._load_arcrest_data(file)
                     else:
                         self._load_data_from_url(file)
@@ -106,14 +106,9 @@ class GeoDataVisualizer:
         self._add_geojson_layer(json.loads(wfs_gdf.to_json()), "WFS Layer")
 
     def _load_arcrest_data(self, url):
-        params = {
-            "where": "1=1",
-            "outFields": "*",
-            "f": "geojson"
-        }
-        response = requests.get(url, params=params)
+        response = requests.get(url)
         if response.status_code == 200:
-            arcrest_gdf = gpd.read_file(response.text)
+            arcrest_gdf = gpd.GeoDataFrame.from_features(response.json()["features"])
             self.data_frames.append(arcrest_gdf)
             self._add_geojson_layer(json.loads(arcrest_gdf.to_json()), "ArcREST Layer")
         else:
