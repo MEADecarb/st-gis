@@ -7,6 +7,7 @@ import folium
 from streamlit_folium import folium_static
 from folium.plugins import MarkerCluster
 
+
 class GeoDataVisualizer:
     def __init__(self):
         self.map = folium.Map([0, 0], zoom_start=2)
@@ -15,6 +16,7 @@ class GeoDataVisualizer:
         self.data_frames = []
         self.latitude_column = None
         self.longitude_column = None
+        self.github_files = {}
         self._setup_page()
 
     def _setup_page(self):
@@ -30,17 +32,18 @@ class GeoDataVisualizer:
             return file
         st.write("Or")
         file_options = self._fetch_github_files()
-        return st.multiselect("Choose one or more options", file_options)
+        selected_files = st.multiselect("Choose one or more options", list(file_options.keys()))
+        return [file_options[file_name] for file_name in selected_files]
 
     def _fetch_github_files(self):
         url = "https://api.github.com/repos/MEADecarb/st-gis/contents/data"
         response = requests.get(url)
         if response.status_code == 200:
-            file_list = [file_info['download_url'] for file_info in response.json() if file_info['name'].endswith(('.csv', '.geojson', '.xlsx', '.zip'))]
-            return file_list
+            self.github_files = {file_info['name']: file_info['download_url'] for file_info in response.json() if file_info['name'].endswith(('.csv', '.geojson', '.xlsx', '.zip'))}
+            return self.github_files
         else:
             st.error("Failed to fetch files from GitHub repository")
-            return []
+            return {}
 
     def _add_basemaps(self):
         folium.TileLayer(
@@ -60,6 +63,7 @@ class GeoDataVisualizer:
             self._fit_map_to_all_bounds()
             folium.LayerControl().add_to(self.map)
             folium_static(self.map, width=1000)
+            self._display_all_data()
 
     def _load_data_from_url(self, url):
         extension = url.split(".")[-1]
@@ -68,12 +72,10 @@ class GeoDataVisualizer:
             data_frame = gpd.read_file(url)
             self.data_frames.append(data_frame)
             json_data_frame = json.loads(data_frame.to_json())
-            self._display_data(data_frame)
             self._add_geojson_layer(json_data_frame, layer_name)
         elif extension in {"csv", "xlsx"}:
             data_frame = self._load_tabular_data(url, extension)
             self.data_frames.append(data_frame)
-            self._display_data(data_frame)
             self._add_markers(data_frame)
         else:
             st.write("Unsupported URL format or unable to load data.")
@@ -83,14 +85,12 @@ class GeoDataVisualizer:
         if extension in {"csv", "xlsx"}:
             data_frame = self._load_tabular_data(uploaded_file, extension)
             self.data_frames.append(data_frame)
-            self._display_data(data_frame)
             self._add_markers(data_frame)
         else:
             data_frame = gpd.read_file(uploaded_file)
             self.data_frames.append(data_frame)
             layer_name = uploaded_file.name.split(".")[0]
             json_data_frame = json.loads(data_frame.to_json())
-            self._display_data(data_frame)
             self._add_geojson_layer(json_data_frame, layer_name)
 
     def _load_tabular_data(self, file, extension):
@@ -178,6 +178,10 @@ class GeoDataVisualizer:
 
     def _display_data(self, data_frame):
         st.dataframe(data_frame.drop(columns="geometry"))
+
+    def _display_all_data(self):
+        for data_frame in self.data_frames:
+            self._display_data(data_frame)
 
     def create_popup_html(self, properties):
         html = "<div style='max-height: 200px; overflow-y: auto;'>"
