@@ -24,6 +24,14 @@ class GeoDataVisualizer:
     def _setup_page(self):
         st.set_page_config(page_title="Data Visualization", layout="wide", page_icon="🗺️")
         st.sidebar.markdown("# Vector Data Visualization 🗺️")
+        with st.sidebar.expander("User Instructions"):
+            st.markdown("""
+            ### Instructions:
+            1. **Upload Files**: Use the uploader to add your own files in CSV, XLSX, ZIP, or GEOJSON formats.
+            2. **Select Files**: Alternatively, select from pre-uploaded files using the dropdown menu.
+            3. **View Map**: The map will automatically update to display the data from the selected or uploaded files.
+            4. **Data Table**: The data associated with the map will be displayed below the map.
+            """)
         self._get_files()
         self._load_data()
         self._save_data()
