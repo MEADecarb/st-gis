@@ -5,37 +5,53 @@ import geopandas as gpd
 import folium
 from streamlit_folium import folium_static
 from folium.plugins import MarkerCluster
+import requests
 
 class GeoDataManipulator:
     def __init__(self):
         self.map = folium.Map([0, 0], zoom_start=2)
         self.marker_cluster = MarkerCluster().add_to(self.map)
-        self.uploaded_file = None
+        self.uploaded_files = None
+        self.selected_files = None
         self.data_frame = None
         self.latitude_column = None
         self.longitude_column = None
+        self.github_files = {}
         self._setup_page()
 
     def _setup_page(self):
         st.set_page_config(page_title="Data Visualization", layout="wide", page_icon="🗺️")
         st.sidebar.markdown("# Vector Data Visualization 🗺️")
-        self.uploaded_file = self._get_uploaded_file()
-        self._add_basemaps()
+        with st.sidebar.expander("User Instructions"):
+            st.markdown("""
+            ### Instructions:
+            1. **Upload Files**: Use the uploader to add your own files in CSV, XLSX, ZIP, or GEOJSON formats.
+            2. **Select Files**: Alternatively, select from pre-uploaded files using the dropdown menu.
+            3. **View Map**: The map will automatically update to display the data from the selected or uploaded files.
+            4. **Data Table**: The data associated with the map will be displayed below the map.
+            """)
+        self._get_files()
         self._load_data()
+        self._save_data()
 
-    def _get_uploaded_file(self):
-        file = st.file_uploader("Upload a file", type=["csv", "xlsx", "zip", "geojson"])
-        if file:
-            return file
+    def _get_files(self):
+        uploaded_files = st.file_uploader("Upload one or more files", type=["csv", "xlsx", "zip", "geojson"], accept_multiple_files=True)
+        if uploaded_files:
+            self.uploaded_files = uploaded_files
         st.write("Or")
-        return st.selectbox(
-            "Choose an option",
-            [
-                "https://raw.githubusercontent.com/incubated-geek-cc/xy-to-latlng-convertor/main/data/CHASClinics_Output.csv",
-                "https://raw.githubusercontent.com/LonnyGomes/CountryGeoJSONCollection/master/geojson/EGY.geojson",
-                "https://raw.githubusercontent.com/openlayers/openlayers/main/examples/data/geojson/vienna-streets.geojson",
-            ],
-        )
+        file_options = self._fetch_github_files()
+        if file_options:
+            selected_files = st.multiselect("Choose one or more options", list(file_options.keys()))
+            self.selected_files = [file_options[file_name] for file_name in selected_files]
+
+    def _fetch_github_files(self):
+        url = "https://api.github.com/repos/MEADecarb/st-gis/contents/data"
+        response = requests.get(url)
+        if response.status_code == 200:
+            self.github_files = {file_info['name']: file_info['download_url'] for file_info in response.json() if file_info['name'].endswith(('.csv', '.geojson', '.xlsx', '.zip'))}
+            return self.github_files
+        else:
+            return {}
 
     def _add_basemaps(self):
         folium.TileLayer(
@@ -46,14 +62,16 @@ class GeoDataManipulator:
         folium.TileLayer("CartoDB dark_matter", name="CartoDB Dark").add_to(self.map)
 
     def _load_data(self):
-        if isinstance(self.uploaded_file, str):
-            self._load_data_from_url(self.uploaded_file)
-        elif self.uploaded_file is not None:
-            extension = self.uploaded_file.name.split(".")[-1]
-            if extension in {"csv", "xlsx"}:
-                self._load_tabular_data(extension)
-            else:
-                self._load_geospatial_data()
+        if self.uploaded_files:
+            for uploaded_file in self.uploaded_files:
+                extension = uploaded_file.name.split(".")[-1]
+                if extension in {"csv", "xlsx"}:
+                    self._load_tabular_data(uploaded_file, extension)
+                else:
+                    self._load_geospatial_data(uploaded_file)
+        elif self.selected_files:
+            for file_url in self.selected_files:
+                self._load_data_from_url(file_url)
 
     def _load_data_from_url(self, url):
         extension = url.split(".")[-1]
@@ -65,15 +83,36 @@ class GeoDataManipulator:
             self._fit_map_to_bounds(self.data_frame.total_bounds)
             self._add_geojson_layer(json_data_frame, layer_name)
         elif extension in {"csv", "xlsx"}:
-            self._load_tabular_data(extension)
+            self._load_tabular_data_from_url(url, extension)
         else:
             st.write("Unsupported URL format or unable to load data.")
 
-    def _load_tabular_data(self, extension):
+    def _load_tabular_data(self, file, extension):
         if extension == "csv":
-            self.data_frame = pd.read_csv(self.uploaded_file)
+            self.data_frame = pd.read_csv(file)
         else:
-            self.data_frame = pd.read_excel(self.uploaded_file, engine="openpyxl")
+            self.data_frame = pd.read_excel(file, engine="openpyxl")
+
+        self.latitude_column, self.longitude_column = self._select_lat_long_columns()
+        self.data_frame = gpd.GeoDataFrame(
+            self.data_frame,
+            geometry=gpd.points_from_xy(
+                self.data_frame[self.longitude_column],
+                self.data_frame[self.latitude_column],
+            ),
+            crs="wgs84",
+        ).dropna(subset=[self.longitude_column, self.latitude_column])
+
+        self._apply_filters()
+        self._fit_map_to_bounds(self.data_frame.total_bounds)
+        self._add_markers()
+        folium.LayerControl().add_to(self.map)
+
+    def _load_tabular_data_from_url(self, url, extension):
+        if extension == "csv":
+            self.data_frame = pd.read_csv(url)
+        else:
+            self.data_frame = pd.read_excel(url, engine="openpyxl")
 
         self.latitude_column, self.longitude_column = self._select_lat_long_columns()
         self.data_frame = gpd.GeoDataFrame(
@@ -112,9 +151,9 @@ class GeoDataManipulator:
             return self.data_frame.columns.get_loc(self.data_frame.columns[column_guess][0])
         return 0
 
-    def _load_geospatial_data(self):
-        self.data_frame = gpd.read_file(self.uploaded_file)
-        layer_name = self.uploaded_file.name.split(".")[0]
+    def _load_geospatial_data(self, file):
+        self.data_frame = gpd.read_file(file)
+        layer_name = file.name.split(".")[0]
         json_data_frame = json.loads(self.data_frame.to_json())
         self._apply_filters()
         self._fit_map_to_bounds(self.data_frame.total_bounds)
