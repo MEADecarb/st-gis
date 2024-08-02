@@ -22,15 +22,17 @@ class GeoDataManipulator:
         self._setup_page()
 
     def _setup_page(self):
-        st.set_page_config(page_title="Data Visualization", layout="wide", page_icon="🗺️")
-        st.sidebar.markdown("# Vector Data Visualization 🗺️")
+        st.set_page_config(page_title="Data Explorer", layout="wide", page_icon="📊")
+        st.sidebar.markdown("# Data Explorer📊")
         with st.sidebar.expander("User Instructions"):
             st.markdown("""
             ### Instructions:
             1. **Upload Files**: Use the uploader to add your own files in CSV, XLSX, ZIP, or GEOJSON formats.
             2. **Select Files**: Alternatively, select from pre-uploaded files using the dropdown menu.
             3. **View Map**: The map will automatically update to display the data from the selected or uploaded files.
-            4. **Data Table**: The data associated with the map will be displayed below the map.
+            4. **Filter Data**: Use the sidebar options to filter the data based on specific columns and values.
+            5. **Download Data**: Download the combined and filtered data as a CSV file using the download button.
+            6. **Data Table**: The data associated with the map will be displayed below the map.
             """)
         self._get_files()
         self._load_data()
@@ -150,7 +152,7 @@ class GeoDataManipulator:
         return latitude_column, longitude_column
 
     def _get_column_index(self, df, pattern):
-        column_guess = df.columns.str.contains(pattern, case=False)
+        column_guess = df.columns.str_contains(pattern, case=False)
         if column_guess.any():
             return df.columns.get_loc(df.columns[column_guess][0])
         return 0
