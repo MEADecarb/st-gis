@@ -1,11 +1,11 @@
 import json
+import requests
 import streamlit as st
 import pandas as pd
 import geopandas as gpd
 import folium
 from streamlit_folium import folium_static
 from folium.plugins import MarkerCluster
-
 
 class GeoDataVisualizer:
     def __init__(self):
@@ -30,14 +30,18 @@ class GeoDataVisualizer:
         if file:
             return file
         st.write("Or")
-        return st.selectbox(
-            "Choose an option",
-            [
-                "https://raw.githubusercontent.com/incubated-geek-cc/xy-to-latlng-convertor/main/data/CHASClinics_Output.csv",
-                "https://raw.githubusercontent.com/LonnyGomes/CountryGeoJSONCollection/master/geojson/EGY.geojson",
-                "https://raw.githubusercontent.com/openlayers/openlayers/main/examples/data/geojson/vienna-streets.geojson",
-            ],
-        )
+        file_options = self._fetch_github_files()
+        return st.selectbox("Choose an option", file_options)
+
+    def _fetch_github_files(self):
+        url = "https://api.github.com/repos/MEADecarb/st-gis/contents/data"
+        response = requests.get(url)
+        if response.status_code == 200:
+            file_list = [file_info['download_url'] for file_info in response.json() if file_info['name'].endswith(('.csv', '.geojson', '.xlsx', '.zip'))]
+            return file_list
+        else:
+            st.error("Failed to fetch files from GitHub repository")
+            return []
 
     def _add_basemaps(self):
         folium.TileLayer(
