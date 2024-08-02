@@ -10,7 +10,7 @@ import tempfile
 
 class GeoDataVisualizer:
     def __init__(self):
-        self.map = folium.Map([0, 0], zoom_start=2)
+        self.map = folium.Map(location=[39.0458, -76.6413], zoom_start=7)  # Centered on Maryland
         self.marker_cluster = MarkerCluster().add_to(self.map)
         self.uploaded_files = []
         self.selected_files = []
@@ -19,11 +19,13 @@ class GeoDataVisualizer:
         self.longitude_column = None
         self.github_files = {}
         self.temp_dir = tempfile.TemporaryDirectory()
+        self.basemap_option = None
         self._setup_page()
 
     def _setup_page(self):
         st.set_page_config(page_title="Data Visualization", layout="wide", page_icon="🗺️")
         st.sidebar.markdown("# Vector Data Visualization 🗺️")
+        self.basemap_option = st.sidebar.selectbox("Choose a basemap", ["Satellite", "Hybrid"])
         self._get_files()
         self._add_basemaps()
         self._load_data()
@@ -49,11 +51,19 @@ class GeoDataVisualizer:
             return {}
 
     def _add_basemaps(self):
-        folium.TileLayer(
-            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-            name="ESRI Satellite",
-            attr="ESRI",
-        ).add_to(self.map)
+        if self.basemap_option == "Satellite":
+            folium.TileLayer(
+                "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+                name="ESRI Satellite",
+                attr="ESRI",
+            ).add_to(self.map)
+        elif self.basemap_option == "Hybrid":
+            folium.TileLayer(
+                tiles="https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+                attr="Google Hybrid",
+                name="Google Hybrid",
+                subdomains=["mt0", "mt1", "mt2", "mt3"],
+            ).add_to(self.map)
         folium.TileLayer("CartoDB dark_matter", name="CartoDB Dark").add_to(self.map)
 
     def _load_data(self):
