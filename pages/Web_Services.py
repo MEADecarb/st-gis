@@ -22,8 +22,9 @@ class GeoDataVisualizer:
         self._setup_page()
 
     def _setup_page(self):
-        st.set_page_config(page_title="Data Visualization", layout="wide", page_icon="🛰️")
-        st.sidebar.markdown("# Vector Data Visualization 🛰️")
+        st.set_page_config(page_title="Web Layers", layout="wide", page_icon="🛰️")
+        st.sidebar.markdown("# Web Feature Services Visualization 🛰️")
+        st.sidebar.write("This is where you can find MD GIS data: [MD iMAP](https://data.imap.maryland.gov/)")
         with st.sidebar.expander("User Instructions"):
             st.markdown("""
             ### Instructions:
