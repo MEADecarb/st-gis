@@ -34,8 +34,9 @@ class GeoDataVisualizer:
             self.uploaded_files = uploaded_files
         st.write("Or")
         file_options = self._fetch_github_files()
-        selected_files = st.multiselect("Choose one or more options", list(file_options.keys()))
-        self.selected_files = [file_options[file_name] for file_name in selected_files]
+        if file_options:
+            selected_files = st.multiselect("Choose one or more options", list(file_options.keys()))
+            self.selected_files = [file_options[file_name] for file_name in selected_files]
 
     def _fetch_github_files(self):
         url = "https://api.github.com/repos/MEADecarb/st-gis/contents/data"
@@ -44,7 +45,6 @@ class GeoDataVisualizer:
             self.github_files = {file_info['name']: file_info['download_url'] for file_info in response.json() if file_info['name'].endswith(('.csv', '.geojson', '.xlsx', '.zip'))}
             return self.github_files
         else:
-            st.error("Failed to fetch files from GitHub repository")
             return {}
 
     def _load_data(self):
@@ -173,12 +173,6 @@ class GeoDataVisualizer:
 
     def _display_data(self, data_frame):
         st.dataframe(data_frame.drop(columns="geometry"))
-
-        # Search functionality
-        search_query = st.text_input("Search data")
-        if search_query:
-            filtered_data = data_frame[data_frame.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)]
-            st.dataframe(filtered_data.drop(columns="geometry"))
 
     def _display_all_data(self):
         for data_frame in self.data_frames:
