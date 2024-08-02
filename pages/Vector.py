@@ -174,6 +174,7 @@ class GeoDataVisualizer:
                 wfs_gdf = gpd.read_file(url)
                 layer_name = f"WFS Layer {i + 1}"
                 json_data_frame = json.loads(wfs_gdf.to_json())
+                self._fit_map_to_bounds(wfs_gdf.total_bounds)
                 self._add_geojson_layer(json_data_frame, layer_name)
             except Exception as e:
                 st.sidebar.error(f"Failed to load WFS URL {i + 1}: {e}")
