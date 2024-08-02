@@ -7,7 +7,6 @@ import folium
 from streamlit_folium import folium_static
 from folium.plugins import MarkerCluster
 
-
 class GeoDataVisualizer:
     def __init__(self):
         self.map = folium.Map([0, 0], zoom_start=2)
@@ -26,6 +25,7 @@ class GeoDataVisualizer:
         self._get_files()
         self._add_basemaps()
         self._load_data()
+        self._save_data()
 
     def _get_files(self):
         uploaded_files = st.file_uploader("Upload one or more files", type=["csv", "xlsx", "zip", "geojson"], accept_multiple_files=True)
@@ -191,6 +191,11 @@ class GeoDataVisualizer:
             html += f"<b>{key}</b>: {value}<br>"
         html += "</div>"
         return html
+
+    def _save_data(self):
+        combined_data = pd.concat(self.data_frames, ignore_index=True)
+        combined_data.to_csv("/tmp/combined_data.csv", index=False)
+        st.success("Data saved successfully!")
 
 if __name__ == "__main__":
     GeoDataVisualizer()
