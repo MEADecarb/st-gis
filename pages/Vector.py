@@ -23,6 +23,7 @@ class GeoDataVisualizer:
         self.uploaded_file = self._get_uploaded_file()
         self._add_basemaps()
         self._load_data()
+        self._add_wfs_layers()
 
     def _get_uploaded_file(self):
         file = st.file_uploader("Upload a file", type=["csv", "xlsx", "zip", "geojson"])
@@ -163,6 +164,19 @@ class GeoDataVisualizer:
             html += f"<b>{key}</b>: {value}<br>"
         html += "</div>"
         return html
+
+    def _add_wfs_layers(self):
+        wfs_urls = st.sidebar.text_area("Enter up to 5 WFS URLs (one per line)").split("\n")
+        wfs_urls = [url.strip() for url in wfs_urls if url.strip()]
+
+        for i, url in enumerate(wfs_urls[:5]):
+            try:
+                wfs_gdf = gpd.read_file(url)
+                layer_name = f"WFS Layer {i + 1}"
+                json_data_frame = json.loads(wfs_gdf.to_json())
+                self._add_geojson_layer(json_data_frame, layer_name)
+            except Exception as e:
+                st.sidebar.error(f"Failed to load WFS URL {i + 1}: {e}")
 
 
 if __name__ == "__main__":
