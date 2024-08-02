@@ -19,15 +19,12 @@ class GeoDataVisualizer:
         self.longitude_column = None
         self.github_files = {}
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.basemap_option = None
         self._setup_page()
 
     def _setup_page(self):
         st.set_page_config(page_title="Data Visualization", layout="wide", page_icon="🗺️")
         st.sidebar.markdown("# Vector Data Visualization 🗺️")
-        self.basemap_option = st.sidebar.selectbox("Choose a basemap", ["Satellite", "Hybrid"])
         self._get_files()
-        self._add_basemaps()
         self._load_data()
         self._save_data()
 
@@ -49,22 +46,6 @@ class GeoDataVisualizer:
         else:
             st.error("Failed to fetch files from GitHub repository")
             return {}
-
-    def _add_basemaps(self):
-        if self.basemap_option == "Satellite":
-            folium.TileLayer(
-                "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-                name="ESRI Satellite",
-                attr="ESRI",
-            ).add_to(self.map)
-        elif self.basemap_option == "Hybrid":
-            folium.TileLayer(
-                tiles="https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
-                attr="Google Hybrid",
-                name="Google Hybrid",
-                subdomains=["mt0", "mt1", "mt2", "mt3"],
-            ).add_to(self.map)
-        folium.TileLayer("CartoDB dark_matter", name="CartoDB Dark").add_to(self.map)
 
     def _load_data(self):
         all_files = self.uploaded_files + self.selected_files
@@ -192,6 +173,12 @@ class GeoDataVisualizer:
 
     def _display_data(self, data_frame):
         st.dataframe(data_frame.drop(columns="geometry"))
+
+        # Search functionality
+        search_query = st.text_input("Search data")
+        if search_query:
+            filtered_data = data_frame[data_frame.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)]
+            st.dataframe(filtered_data.drop(columns="geometry"))
 
     def _display_all_data(self):
         for data_frame in self.data_frames:
