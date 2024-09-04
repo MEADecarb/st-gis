@@ -24,6 +24,9 @@ earthengine-api==0.1.405
 geemap==0.32.1
 ipyleaflet==0.18.2
 
+# Web Feature Service (WFS) and additional geospatial functionality
+OWSLib==0.28.1
+
 # HTTP requests
 requests==2.32.3
 urllib3==2.2.1
@@ -33,7 +36,6 @@ beautifulsoup4==4.12.3
 protobuf==3.20.3
 
 # Ensuring compatible versions for key dependencies
-protobuf==3.20.3
 pytz==2024.1
 python-dateutil==2.9.0.post0
 six==1.16.0
