@@ -1,13 +1,12 @@
+from streamlit_folium import st_folium
 import json
 import requests
 import streamlit as st
 import pandas as pd
 import geopandas as gpd
 import folium
-from streamlit_folium import folium_static
 from folium.plugins import MarkerCluster
 import matplotlib.pyplot as plt
-import tempfile
 
 class GeoDataVisualizer:
     def __init__(self):
@@ -21,266 +20,99 @@ class GeoDataVisualizer:
         self.github_files = {}
         self.chart_columns = []  # Store chart columns selected by the user
         self.chart_type = 'Bar'  # Default chart type
-        self.map_bounds = None  # To store current map bounds
-        self.temp_dir = tempfile.TemporaryDirectory()
         self._setup_page()
 
     def _setup_page(self):
         st.set_page_config(page_title="Web Layers", layout="wide", page_icon="🛰️")
         st.sidebar.markdown("# Web Feature Services Visualization 🛰️")
         st.sidebar.write("This is where you can find MD GIS data: [MD iMAP](https://data.imap.maryland.gov/)")
-        with st.sidebar.expander("User Instructions"):
-            st.markdown("""
-            ### Instructions:
-            1. **Upload Files**: Use the uploader to add your own files in CSV, XLSX, ZIP, or GEOJSON formats.
-            2. **Select Files**: Alternatively, select from pre-uploaded files using the dropdown menu.
-            3. **Add URLs**: Enter WFS or ArcREST URLs to load data directly from web services.
-            4. **View Map**: The map will automatically update to display the data from the selected or uploaded files.
-            5. **Data Table**: The data associated with the map will be displayed below the map.
-            6. **Charts**: Select columns and chart types to visualize, and the charts will update based on map interactions.
-            """)
         self._get_files()
         if self.uploaded_files or self.selected_files:
             self._load_data()
             self._display_layout()
 
     def _get_files(self):
-        uploaded_files = st.file_uploader("Upload one or more files", type=["csv", "xlsx", "zip", "geojson"], accept_multiple_files=True)
+        uploaded_files = st.file_uploader("Upload one or more files", type=["csv", "xlsx", "geojson"], accept_multiple_files=True)
         if uploaded_files:
             self.uploaded_files = uploaded_files
-        st.write("Or")
-        file_options = self._fetch_github_files()
-        if file_options:
-            selected_files = st.multiselect("Choose one or more options", list(file_options.keys()))
-            self.selected_files = [file_options[file_name] for file_name in selected_files]
-        
         st.write("Or")
         wfs_url = st.text_input("Enter WFS URL")
         if wfs_url:
             self.selected_files.append(wfs_url)
-        
-        st.write("Or")
-        arcrest_url = st.text_input("Enter ArcREST URL")
-        if arcrest_url:
-            self.selected_files.append(arcrest_url)
-
-    def _fetch_github_files(self):
-        url = "https://api.github.com/repos/MEADecarb/st-gis/contents/data"
-        response = requests.get(url)
-        if response.status_code == 200:
-            self.github_files = {file_info['name']: file_info['download_url'] for file_info in response.json() if file_info['name'].endswith(('.csv', '.geojson', '.xlsx', '.zip'))}
-            return self.github_files
-        else:
-            return {}
 
     def _load_data(self):
         all_files = self.uploaded_files + self.selected_files
         if all_files:
             for file in all_files:
                 if isinstance(file, str):
-                    if "wfs" in file.lower():
-                        self._load_wfs_data(file)
-                    elif "arcgis" in file.lower() or "featureserver" in file.lower():
-                        self._load_arcrest_data(file)
-                    else:
-                        self._load_data_from_url(file)
+                    self._load_data_from_url(file)
                 else:
                     self._load_data_from_file(file)
-            self._fit_map_to_all_bounds()
             folium.LayerControl().add_to(self.map)
-            folium_static(self.map, width=1000)
-
-            # Allow user to select columns for charts and chart type
-            self.chart_columns = st.sidebar.multiselect(
-                "Select columns for charting:",
-                self.data_frames[0].columns if self.data_frames else []
-            )
-            self.chart_type = st.sidebar.selectbox("Select chart type:", ['Bar', 'Pie'])
 
     def _load_data_from_url(self, url):
         extension = url.split(".")[-1]
-        layer_name = url.split('/')[-1].split('.')[0]
         if extension == "geojson":
             data_frame = gpd.read_file(url)
             self.data_frames.append(data_frame)
             json_data_frame = json.loads(data_frame.to_json())
-            self._add_geojson_layer(json_data_frame, layer_name)
-        elif extension in {"csv", "xlsx"}:
-            data_frame = self._load_tabular_data(url, extension)
+            self._add_geojson_layer(json_data_frame, url.split('/')[-1])
+        elif extension == "csv":
+            data_frame = pd.read_csv(url)
             self.data_frames.append(data_frame)
             self._add_markers(data_frame)
-        else:
-            st.write("Unsupported URL format or unable to load data.")
-
-    def _load_wfs_data(self, url):
-        wfs_gdf = gpd.read_file(url)
-        self.data_frames.append(wfs_gdf)
-        self._add_geojson_layer(json.loads(wfs_gdf.to_json()), "WFS Layer")
-
-    def _load_arcrest_data(self, url):
-        response = requests.get(url)
-        if response.status_code == 200:
-            arcrest_gdf = gpd.GeoDataFrame.from_features(response.json()["features"])
-            self.data_frames.append(arcrest_gdf)
-            self._add_geojson_layer(json.loads(arcrest_gdf.to_json()), "ArcREST Layer")
-        else:
-            st.write("Failed to load ArcREST data")
 
     def _load_data_from_file(self, uploaded_file):
         extension = uploaded_file.name.split(".")[-1]
         if extension in {"csv", "xlsx"}:
-            data_frame = self._load_tabular_data(uploaded_file, extension)
+            data_frame = pd.read_csv(uploaded_file) if extension == "csv" else pd.read_excel(uploaded_file)
             self.data_frames.append(data_frame)
             self._add_markers(data_frame)
-        else:
-            data_frame = gpd.read_file(uploaded_file)
-            self.data_frames.append(data_frame)
-            layer_name = uploaded_file.name.split(".")[0]
-            json_data_frame = json.loads(data_frame.to_json())
-            self._add_geojson_layer(json_data_frame, layer_name)
-
-    def _load_tabular_data(self, file, extension):
-        if extension == "csv":
-            data_frame = pd.read_csv(file)
-        else:
-            data_frame = pd.read_excel(file, engine="openpyxl")
-
-        self.latitude_column, self.longitude_column = self._select_lat_long_columns(data_frame)
-
-        data_frame = gpd.GeoDataFrame(
-            data_frame,
-            geometry=gpd.points_from_xy(
-                data_frame[self.longitude_column],
-                data_frame[self.latitude_column],
-            ),
-            crs="wgs84",
-        ).dropna(subset=[self.longitude_column, self.latitude_column])
-
-        return data_frame
-
-    def _select_lat_long_columns(self, data_frame):
-        col1, col2 = st.columns(2)
-
-        with col1:
-            lat_index = self._get_column_index(data_frame, "lat|latitude")
-            latitude_column = st.selectbox(
-                "Choose latitude column:", data_frame.columns, index=lat_index
-            )
-        with col2:
-            lng_index = self._get_column_index(data_frame, "lng|long|longitude")
-            longitude_column = st.selectbox(
-                "Choose longitude column:", data_frame.columns, index=lng_index
-            )
-
-        return latitude_column, longitude_column
-
-    def _get_column_index(self, data_frame, pattern):
-        column_guess = data_frame.columns.str.contains(pattern, case=False)
-        if column_guess.any():
-            return data_frame.columns.get_loc(data_frame.columns[column_guess][0])
-        return 0
 
     def _add_geojson_layer(self, json_data_frame, layer_name):
-        if "features" in json_data_frame and json_data_frame["features"]:
-            property_keys = list(json_data_frame["features"][0]["properties"].keys())
-            folium.GeoJson(
-                json_data_frame,
-                name=layer_name,
-                zoom_on_click=True,
-                highlight_function=lambda feature: {"fillColor": "dark gray"},
-                popup=folium.GeoJsonPopup(
-                    fields=property_keys,
-                    aliases=property_keys,
-                    localize=True,
-                    style="max-height: 200px; overflow-y: auto;",
-                ),
-            ).add_to(self.map)
-        else:
-            folium.GeoJson(json_data_frame, name=layer_name, zoom_on_click=True).add_to(self.map)
-
-    def _fit_map_to_bounds(self, bounds):
-        self.map.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
-
-    def _fit_map_to_all_bounds(self):
-        if self.data_frames:
-            combined_bounds = None
-            for data_frame in self.data_frames:
-                if combined_bounds is None:
-                    combined_bounds = data_frame.total_bounds
-                else:
-                    combined_bounds[0] = min(combined_bounds[0], data_frame.total_bounds[0])
-                    combined_bounds[1] = min(combined_bounds[1], data_frame.total_bounds[1])
-                    combined_bounds[2] = max(combined_bounds[2], data_frame.total_bounds[2])
-                    combined_bounds[3] = max(combined_bounds[3], data_frame.total_bounds[3])
-            self._fit_map_to_bounds(combined_bounds)
+        folium.GeoJson(json_data_frame, name=layer_name).add_to(self.map)
 
     def _add_markers(self, data_frame):
         for _, row in data_frame.iterrows():
-            popup_html = self.create_popup_html(row[:-1])
             folium.Marker(
-                location=[row[self.latitude_column], row[self.longitude_column]],
-                popup=folium.Popup(popup_html, max_width=300),
+                location=[row['lat'], row['lon']], 
+                popup=folium.Popup(str(row))
             ).add_to(self.marker_cluster)
 
-    def _display_data(self, data_frame):
-        st.dataframe(data_frame.drop(columns="geometry"))
-
-    def _display_all_data(self):
-        for data_frame in self.data_frames:
-            self._display_data(data_frame)
-
-    def create_popup_html(self, properties):
-        html = "<div style='max-height: 200px; overflow-y: auto;'>"
-        for key, value in properties.items():
-            html += f"<b>{key}</b>: {value}<br>"
-        html += "</div>"
-        return html
-
     def _display_layout(self):
-        col1, col2 = st.columns([1, 1])
-
+        col1, col2 = st.columns([2, 1])
         with col1:
-            st.markdown("## Map")
-            map_data = folium_static(self.map, width=1000)
-
+            map_data = st_folium(self.map, width=800, height=500, returned_objects=['bounds'])
+            self.map_bounds = map_data['bounds'] if 'bounds' in map_data else None
+            st.write(f"Current map bounds: {self.map_bounds}")
+        
         with col2:
-            st.markdown("## Data Table")
-            if not self.data_frames:
-                st.write("No data available")
-            else:
-                st.dataframe(self.data_frame.drop(columns="geometry"))
-                st.download_button(
-                    label="Download data as CSV",
-                    data=self.data_frame.to_csv().encode("utf-8"),
-                    file_name="Streamlit_df.csv",
-                    mime="text/csv",
-                )
+            if self.map_bounds:
+                st.write("Displaying data within current bounds:")
+                visible_data = self._filter_data_by_bounds(self.map_bounds)
+                st.dataframe(visible_data)
+                self._plot_charts_based_on_columns(visible_data)
 
-        if self.chart_columns:
-            self._plot_charts_based_on_columns()
+    def _filter_data_by_bounds(self, bounds):
+        if not bounds or not self.data_frames:
+            return pd.DataFrame()
+        min_lon, min_lat = bounds['_southWest']['lng'], bounds['_southWest']['lat']
+        max_lon, max_lat = bounds['_northEast']['lng'], bounds['_northEast']['lat']
+        data_frame = pd.concat(self.data_frames)
+        return data_frame[(data_frame['lon'] >= min_lon) & (data_frame['lon'] <= max_lon) &
+                          (data_frame['lat'] >= min_lat) & (data_frame['lat'] <= max_lat)]
 
-    def _plot_charts_based_on_columns(self):
-        for column in self.chart_columns:
-            # Extract data from the visible area of the map
-            visible_data = self._get_visible_data_in_map()
-            if column in visible_data.columns:
-                if self.chart_type == 'Bar':
-                    fig, ax = plt.subplots()
-                    visible_data[column].value_counts().plot(kind='bar', ax=ax)
-                    ax.set_title(f"Bar Chart of {column}")
-                    st.pyplot(fig)
-                elif self.chart_type == 'Pie':
-                    fig, ax = plt.subplots()
-                    visible_data[column].value_counts().plot(kind='pie', ax=ax, autopct='%1.1f%%')
-                    ax.set_title(f"Pie Chart of {column}")
-                    st.pyplot(fig)
-
-    def _get_visible_data_in_map(self):
-        # Get the current map bounds from the map
-        bounds = self.map.get_bounds()  # Adjust this as necessary depending on how you're getting bounds
-        filtered_data = pd.concat(self.data_frames)
-        visible_data = filtered_data.cx[bounds[1]:bounds[3], bounds[0]:bounds[2]]  # Filtering by bounding box
-        return visible_data
+    def _plot_charts_based_on_columns(self, visible_data):
+        chart_columns = st.sidebar.multiselect("Select columns for charting:", visible_data.columns)
+        chart_type = st.sidebar.selectbox("Select chart type:", ['Bar', 'Pie'])
+        if chart_columns:
+            for column in chart_columns:
+                if chart_type == 'Bar':
+                    visible_data[column].value_counts().plot(kind='bar')
+                    st.pyplot(plt.gcf())
+                elif chart_type == 'Pie':
+                    visible_data[column].value_counts().plot(kind='pie', autopct='%1.1f%%')
+                    st.pyplot(plt.gcf())
 
 if __name__ == "__main__":
     GeoDataVisualizer()
