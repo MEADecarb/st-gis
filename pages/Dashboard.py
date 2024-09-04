@@ -6,6 +6,7 @@ import geopandas as gpd
 import folium
 from streamlit_folium import folium_static
 from folium.plugins import MarkerCluster
+import matplotlib.pyplot as plt
 import tempfile
 
 class GeoDataVisualizer:
@@ -18,6 +19,9 @@ class GeoDataVisualizer:
         self.latitude_column = None
         self.longitude_column = None
         self.github_files = {}
+        self.chart_columns = []  # Store chart columns selected by the user
+        self.chart_type = 'Bar'  # Default chart type
+        self.map_bounds = None  # To store current map bounds
         self.temp_dir = tempfile.TemporaryDirectory()
         self._setup_page()
 
@@ -33,6 +37,7 @@ class GeoDataVisualizer:
             3. **Add URLs**: Enter WFS or ArcREST URLs to load data directly from web services.
             4. **View Map**: The map will automatically update to display the data from the selected or uploaded files.
             5. **Data Table**: The data associated with the map will be displayed below the map.
+            6. **Charts**: Select columns and chart types to visualize, and the charts will update based on map interactions.
             """)
         self._get_files()
         if self.uploaded_files or self.selected_files:
@@ -84,7 +89,13 @@ class GeoDataVisualizer:
             self._fit_map_to_all_bounds()
             folium.LayerControl().add_to(self.map)
             folium_static(self.map, width=1000)
-            self._display_all_data()
+
+            # Allow user to select columns for charts and chart type
+            self.chart_columns = st.sidebar.multiselect(
+                "Select columns for charting:",
+                self.data_frames[0].columns if self.data_frames else []
+            )
+            self.chart_type = st.sidebar.selectbox("Select chart type:", ['Bar', 'Pie'])
 
     def _load_data_from_url(self, url):
         extension = url.split(".")[-1]
@@ -230,7 +241,7 @@ class GeoDataVisualizer:
 
         with col1:
             st.markdown("## Map")
-            folium_static(self.map, width=1000)
+            map_data = folium_static(self.map, width=1000)
 
         with col2:
             st.markdown("## Data Table")
@@ -245,5 +256,31 @@ class GeoDataVisualizer:
                     mime="text/csv",
                 )
 
+        if self.chart_columns:
+            self._plot_charts_based_on_columns()
+
+    def _plot_charts_based_on_columns(self):
+        for column in self.chart_columns:
+            # Extract data from the visible area of the map
+            visible_data = self._get_visible_data_in_map()
+            if column in visible_data.columns:
+                if self.chart_type == 'Bar':
+                    fig, ax = plt.subplots()
+                    visible_data[column].value_counts().plot(kind='bar', ax=ax)
+                    ax.set_title(f"Bar Chart of {column}")
+                    st.pyplot(fig)
+                elif self.chart_type == 'Pie':
+                    fig, ax = plt.subplots()
+                    visible_data[column].value_counts().plot(kind='pie', ax=ax, autopct='%1.1f%%')
+                    ax.set_title(f"Pie Chart of {column}")
+                    st.pyplot(fig)
+
+    def _get_visible_data_in_map(self):
+        # Get the current map bounds from the map
+        bounds = self.map.get_bounds()  # Adjust this as necessary depending on how you're getting bounds
+        filtered_data = pd.concat(self.data_frames)
+        visible_data = filtered_data.cx[bounds[1]:bounds[3], bounds[0]:bounds[2]]  # Filtering by bounding box
+        return visible_data
+
 if __name__ == "__main__":
-    GeoDataVisualizer() 
+    GeoDataVisualizer()
